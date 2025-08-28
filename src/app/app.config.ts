@@ -1,4 +1,4 @@
-import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
+import { ApplicationConfig, provideZoneChangeDetection, importProvidersFrom } from '@angular/core';
 import { provideRouter } from '@angular/router';
 
 import { routes } from './app.routes';
@@ -47,13 +47,36 @@ const themePreset = definePreset(Aura, {
   }
 })
 
+import { provideFirebaseApp, initializeApp } from '@angular/fire/app';
+import { provideAuth, getAuth } from '@angular/fire/auth';
+import { provideFirestore, getFirestore } from '@angular/fire/firestore';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCKzXF5w73J7awYIzXycMJgiAedd6EghHU",
+  authDomain: "foxhole-9e399.firebaseapp.com",
+  projectId: "foxhole-9e399",
+  storageBucket: "foxhole-9e399.firebasestorage.app",
+  messagingSenderId: "226171503921",
+  appId: "1:226171503921:web:c83861b3029cfa0e6e9c10",
+  measurementId: "G-JP3XMB1XGW"
+};
+
 export const appConfig: ApplicationConfig = {
-  providers: [provideZoneChangeDetection({ eventCoalescing: true }), provideRouter(routes), provideHttpClient(withInterceptorsFromDi()), provideAnimations(), providePrimeNG({
-    theme: {
-      preset: themePreset,
-      options: {
-        darkModeSelector: "system"
+  providers: [
+    provideZoneChangeDetection({ eventCoalescing: true }), 
+    provideRouter(routes), 
+    provideHttpClient(withInterceptorsFromDi()), 
+    provideAnimations(), 
+    providePrimeNG({
+      theme: {
+        preset: themePreset,
+        options: {
+          darkModeSelector: "system"
+        }
       }
-    }
-  })]
+    }),
+    provideFirebaseApp(() => initializeApp(firebaseConfig)),
+    provideAuth(() => getAuth()),
+    provideFirestore(() => getFirestore())
+  ]
 };
