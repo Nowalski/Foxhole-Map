@@ -9,6 +9,7 @@ import {
   doc,
   updateDoc,
   deleteDoc,
+  getDoc,
   CollectionReference,
   DocumentData
 } from '@angular/fire/firestore';
@@ -28,12 +29,19 @@ export interface DrawingFeature {
   creator: {
     uid: string;
     displayName: string;
+    team: 'Colonial' | 'Warden' | null;
   };
   timestamp: number;
-  team?: 'colonial' | 'warden' | 'neutral';
+  team: 'Colonial' | 'Warden' | 'Neutral';
   description?: string;
-  visibility: 'public' | 'team' | 'private';
+  visibility: 'Public' | 'Team' | 'Private';
   tags: string[];
+  lastModified?: number;
+  lastModifiedBy?: {
+    uid: string;
+    displayName: string;
+    team: 'Colonial' | 'Warden' | null;
+  };
 }
 
 @Injectable({
@@ -41,7 +49,7 @@ export interface DrawingFeature {
 })
 export class DrawingService {
   private activeFeatures = new BehaviorSubject<Map<string, Feature>>(new Map());
-  private userTeam = new BehaviorSubject<'colonial' | 'warden' | null>(null);
+  private userTeam = new BehaviorSubject<'Colonial' | 'Warden' | null>(null);
   private firestore: Firestore = inject(Firestore);
   private authService: AuthService = inject(AuthService);
   private drawingsCollection: CollectionReference<DocumentData>;
@@ -58,19 +66,13 @@ export class DrawingService {
     ]).subscribe(([user, team]) => {
       if (!user) return;
 
-      const q = query(
-        this.drawingsCollection,
-        where('visibility', 'in', ['public', 'team']),
-        where('timestamp', '>', Date.now() - 24 * 60 * 60 * 1000) // Last 24h
-      );
+      // Get all drawings without filtering
+      const q = query(this.drawingsCollection);
 
       onSnapshot(q, (snapshot) => {
         snapshot.docChanges().forEach((change) => {
           const data = change.doc.data() as DrawingFeature;
           
-          // Filter based on visibility and team
-          if (data.visibility === 'team' && data.team !== team) return;
-
           if (change.type === 'added' || change.type === 'modified') {
             this.updateFeature(change.doc.id, data);
           } else if (change.type === 'removed') {
@@ -82,21 +84,39 @@ export class DrawingService {
   }
 
   async addDrawing(feature: DrawingFeature): Promise<string> {
-    const user = await firstValueFrom(this.authService.getCurrentUser());
-    if (!user) throw new Error('Must be logged in to draw');
+    try {
+      const user = await firstValueFrom(this.authService.getCurrentUser());
+      if (!user) throw new Error('Must be logged in to draw');
+      
+      const team = this.userTeam.value;
+      if (!team) throw new Error('Must select a team to draw');
 
-    const drawingData = {
-      ...feature,
-      creator: {
-        uid: user.uid,
-        displayName: user.displayName
-      },
-      timestamp: Date.now(),
-      team: this.userTeam.value
-    };
+      const drawingData = {
+        ...feature,
+        creator: {
+          uid: user.uid,
+          displayName: user.displayName,
+          team: team
+        },
+        timestamp: Date.now(),
+        lastModified: Date.now(),
+        team: team,
+        visibility: 'Public',  // Make all drawings public by default
+        lastModifiedBy: {
+          uid: user.uid,
+          displayName: user.displayName,
+          team: team
+        }
+      };
 
-    const docRef = await addDoc(this.drawingsCollection, drawingData);
-    return docRef.id;
+      console.log('Saving drawing:', drawingData);
+      const docRef = await addDoc(this.drawingsCollection, drawingData);
+      console.log('Drawing saved with ID:', docRef.id);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding drawing:', error);
+      throw error;
+    }
   }
 
   getDrawings(): Observable<DrawingFeature[]> {
@@ -120,8 +140,43 @@ export class DrawingService {
     const user = await firstValueFrom(this.authService.getCurrentUser());
     if (!user) throw new Error('Must be logged in to update drawings');
 
+    const team = this.userTeam.value;
+    if (!team) throw new Error('Must be part of a team to update drawings');
+
     const docRef = doc(this.firestore, 'drawings', id);
-    await updateDoc(docRef, updates);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error('Drawing not found');
+    }
+
+    const drawing = docSnap.data() as DrawingFeature;
+
+    // Check permissions
+    if (drawing.visibility === 'Private' && drawing.creator.uid !== user.uid) {
+      throw new Error('Cannot modify private drawings of other users');
+    }
+
+    if (drawing.visibility === 'Team' && drawing.team !== team) {
+      throw new Error('Cannot modify drawings from other teams');
+    }
+
+    const updateData = {
+      ...updates,
+      lastModified: Date.now(),
+      lastModifiedBy: {
+        uid: user.uid,
+        displayName: user.displayName,
+        team
+      }
+    };
+
+    // Prevent changing visibility of team drawings to private
+    if (updateData.visibility === 'Private') {
+      delete updateData.visibility;
+    }
+
+    await updateDoc(docRef, updateData);
   }
 
   async deleteDrawing(id: string): Promise<void> {
@@ -148,11 +203,17 @@ export class DrawingService {
 
   private convertToOLFeature(data: DrawingFeature): Feature {
     const feature = new Feature({
-      geometry: new Point(data.coordinates[0])
+      geometry: new Point(data.coordinates[0]),
+      ...data  // Include all drawing data in the feature
     });
     
     if (data.style) {
-      feature.setStyle(new Style(data.style));
+      try {
+        const style = new Style(data.style);
+        feature.setStyle(style);
+      } catch (error) {
+        console.error('Failed to set style:', error);
+      }
     }
     
     // Store the original drawing data for reference
@@ -160,7 +221,7 @@ export class DrawingService {
     return feature;
   }
 
-  setUserTeam(team: 'colonial' | 'warden' | null): void {
+  setUserTeam(team: 'Colonial' | 'Warden' | null): void {
     this.userTeam.next(team);
   }
 

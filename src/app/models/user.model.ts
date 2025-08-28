@@ -1,8 +1,13 @@
+export type Team = 'Colonial' | 'Warden' | null;
+
 export interface User {
   uid: string;
   email: string;
   displayName: string;
   lastLogin?: Date;
+  team?: Team;
+  lastTeamSwitch?: Date;
+  createdAt?: Date;
 }
 
 export interface UserPreferences {

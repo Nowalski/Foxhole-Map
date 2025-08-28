@@ -1,0 +1,29 @@
+mutation AddNewMapMarker($authorId: UUID, $description: String, $imageUrl: String, $markerType: String!, $xCoord: Float!, $yCoord: Float!) @auth(level: USER) {
+  mapMarker_insert(data: {authorId: $authorId, description: $description, imageUrl: $imageUrl, markerType: $markerType, xCoord: $xCoord, yCoord: $yCoord, createdAt_expr: "request.time", updatedAt_expr: "request.time"})
+}
+
+query ListVerifiedMapMarkers @auth(level: PUBLIC) {
+  mapMarkers(where: {isVerified: {eq: true}}) {
+    id
+    xCoord
+    yCoord
+    markerType
+    description
+    imageUrl
+  }
+}
+
+mutation ConfirmMapMarker($markerId: UUID!, $userId: UUID!) @auth(level: USER) {
+  markerConfirmation_insert(data: {markerId: $markerId, userId: $userId, isConfirmed: true, createdAt_expr: "request.time"})
+}
+
+query GetMapMarkersByType($markerType: String!) @auth(level: PUBLIC) {
+  mapMarkers(where: {markerType: {eq: $markerType}}) {
+    id
+    xCoord
+    yCoord
+    description
+    imageUrl
+    isVerified
+  }
+}

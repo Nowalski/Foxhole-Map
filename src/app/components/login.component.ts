@@ -47,8 +47,8 @@ import { MessageService } from 'primeng/api';
             </small>
           </div>
           <div class="flex justify-between">
-            <p-button type="submit" [disabled]="!loginForm.valid" label="Login"></p-button>
-            <p-button type="button" (onClick)="navigateToRegister()" severity="secondary" label="Register"></p-button>
+            <p-button type="submit" [loading]="loading" [disabled]="!loginForm.valid || loading" label="Login"></p-button>
+            <p-button type="button" (click)="navigateToRegister()" severity="secondary" label="Register"></p-button>
           </div>
         </form>
       </p-card>
@@ -71,19 +71,42 @@ export class LoginComponent {
     });
   }
 
-  async onSubmit() {
-    if (this.loginForm.valid) {
-      try {
-        const { email, password } = this.loginForm.value;
-        await this.authService.login(email, password);
-        this.router.navigate(['/map']);
-      } catch (error: any) {
-        this.messageService.add({
-          severity: 'error',
-          summary: 'Login Failed',
-          detail: error.message || 'Please check your credentials and try again.'
+  protected loading = false;
+
+  protected onSubmit(): void {
+    if (this.loginForm.valid && !this.loading) {
+      console.log('Starting login process...');
+      this.loading = true;
+      const { email, password } = this.loginForm.value;
+      
+      this.authService.login(email, password)
+        .then(() => {
+          console.log('Login successful, navigating...');
+          // Add a small delay to ensure Firebase auth state is updated
+          setTimeout(() => {
+            this.router.navigate(['/map']).then(() => {
+              console.log('Navigation complete');
+            }).catch(err => {
+              console.error('Navigation failed:', err);
+              this.messageService.add({
+                severity: 'error',
+                summary: 'Navigation Failed',
+                detail: 'Could not navigate to map. Please try again.'
+              });
+            });
+          }, 500);
+        })
+        .catch((error: any) => {
+          console.error('Login error in component:', error);
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Login Failed',
+            detail: error.message || 'Please check your credentials and try again.'
+          });
+        })
+        .finally(() => {
+          this.loading = false;
         });
-      }
     }
   }
 

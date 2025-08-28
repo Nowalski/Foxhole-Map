@@ -1,0 +1,37 @@
+type User @table {
+  displayName: String!
+  createdAt: Timestamp!
+  faction: String
+  photoUrl: String
+}
+
+type MapMarker @table {
+  markerType: String!
+  xCoord: Float!
+  yCoord: Float!
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+  description: String
+  imageUrl: String
+  isVerified: Boolean
+  author: User
+}
+
+type MarkerConfirmation @table(key: ["marker", "user"]) {
+  isConfirmed: Boolean!
+  createdAt: Timestamp!
+  marker: MapMarker!
+  user: User!
+}
+
+type GameSession @table {
+  currentWarDay: Int!
+  warPhase: String!
+  updatedAt: Timestamp!
+}
+
+type StructureType @table {
+  name: String!
+  category: String!
+  description: String
+}

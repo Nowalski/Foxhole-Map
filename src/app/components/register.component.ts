@@ -6,8 +6,10 @@ import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { CardModule } from 'primeng/card';
 import { ToastModule } from 'primeng/toast';
+import { SelectButtonModule } from 'primeng/selectbutton';
 import { MessageService } from 'primeng/api';
 import { AuthService } from '../services/auth.service';
+import type { Team } from '../models/user.model';
 
 @Component({
   selector: 'app-register',
@@ -18,10 +20,11 @@ import { AuthService } from '../services/auth.service';
     ButtonModule,
     InputTextModule,
     CardModule,
-    ToastModule
+    ToastModule,
+    SelectButtonModule
   ],
   providers: [MessageService],
-  template: `
+  template: /* html */`
     <div class="flex min-h-screen items-center justify-center bg-gray-100 dark:bg-gray-900">
       <p-card header="Register" class="w-full max-w-md shadow-lg">
         <form [formGroup]="registerForm" (ngSubmit)="onSubmit()" class="space-y-4">
@@ -61,9 +64,25 @@ import { AuthService } from '../services/auth.service';
             </small>
           </div>
 
+          <div class="mb-4">
+            <label class="block mb-2">Select Your Team</label>
+            <p-selectButton [options]="teamOptions" formControlName="team" optionLabel="label" optionValue="value"
+              styleClass="w-full">
+              <ng-template let-option pTemplate="content">
+                <div class="flex items-center gap-2">
+                  <i [class]="option.value === 'Colonial' ? 'pi pi-shield' : 'pi pi-flag'"></i>
+                  <span>{{option.label}}</span>
+                </div>
+              </ng-template>
+            </p-selectButton>
+            <small class="text-red-500" *ngIf="registerForm.get('team')?.errors?.['required'] && registerForm.get('team')?.touched">
+              Please select a team
+            </small>
+          </div>
+
           <div class="flex justify-between">
-            <p-button type="submit" [disabled]="!registerForm.valid" label="Register"></p-button>
-            <p-button type="button" (onClick)="navigateToLogin()" severity="secondary" label="Back to Login"></p-button>
+            <p-button type="submit" [loading]="loading" [disabled]="!registerForm.valid || loading" label="Register"></p-button>
+            <p-button type="button" (click)="navigateToLogin()" severity="secondary" label="Back to Login"></p-button>
           </div>
         </form>
       </p-card>
@@ -80,7 +99,11 @@ import { AuthService } from '../services/auth.service';
   `]
 })
 export class RegisterComponent {
-  registerForm: FormGroup;
+  protected registerForm: FormGroup;
+  protected teamOptions = [
+    { label: 'Colonial', value: 'Colonial' as Team },
+    { label: 'Warden', value: 'Warden' as Team }
+  ];
 
   constructor(
     private fb: FormBuilder,
@@ -91,32 +114,64 @@ export class RegisterComponent {
     this.registerForm = this.fb.group({
       username: ['', [Validators.required]],
       email: ['', [Validators.required, Validators.email]],
-      password: ['', [Validators.required, Validators.minLength(6)]]
+      password: ['', [Validators.required, Validators.minLength(6)]],
+      team: ['', [Validators.required]]
     });
   }
 
-  async onSubmit() {
-    if (this.registerForm.valid) {
-      try {
-        const { email, password, username } = this.registerForm.value;
-        await this.authService.register(email, password, username);
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Registration Successful',
-          detail: 'You can now login with your credentials'
+  protected loading = false;
+
+  protected onSubmit(): void {
+    if (this.registerForm.valid && !this.loading) {
+      console.log('Starting registration process...');
+      this.loading = true;
+      const { email, password, username, team } = this.registerForm.value;
+      
+      this.authService.register(email, password, username, team)
+        .then(() => {
+          console.log('Registration successful, showing message...');
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Registration Successful',
+            detail: 'You can now login with your credentials'
+          });
+          
+          // Add a small delay before navigation
+          setTimeout(() => {
+            console.log('Navigating to login...');
+            this.router.navigate(['/login']).then(() => {
+              console.log('Navigation complete');
+            }).catch(err => {
+              console.error('Navigation failed:', err);
+              this.messageService.add({
+                severity: 'error',
+                summary: 'Navigation Failed',
+                detail: 'Could not navigate to login. Please refresh the page.'
+              });
+            });
+          }, 500);
+        })
+        .catch((error: any) => {
+          console.error('Registration error in component:', error);
+          let errorMessage = 'Please try again later';
+          if (error.code === 'auth/email-already-in-use') {
+            errorMessage = 'This email is already registered';
+          } else if (error.code === 'auth/weak-password') {
+            errorMessage = 'Password is too weak';
+          }
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Registration Failed',
+            detail: errorMessage
+          });
+        })
+        .finally(() => {
+          this.loading = false;
         });
-        this.router.navigate(['/login']);
-      } catch (error: any) {
-        this.messageService.add({
-          severity: 'error',
-          summary: 'Registration Failed',
-          detail: error.message || 'Please try again later'
-        });
-      }
     }
   }
 
-  navigateToLogin() {
+  protected navigateToLogin(): void {
     this.router.navigate(['/login']);
   }
 }

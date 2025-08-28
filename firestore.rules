@@ -1,0 +1,23 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    match /drawings/{drawingId} {
+      // Anyone can read drawings if they're authenticated
+      allow read: if request.auth != null;
+      
+      // Anyone can create drawings if they're authenticated
+      allow create: if request.auth != null;
+      
+      // Only the creator can update/delete their drawings
+      allow update, delete: if request.auth != null && 
+                             request.auth.uid == resource.data.creator.uid;
+    }
+  }
+}
